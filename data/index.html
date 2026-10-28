@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>PLED Control</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --card: #0d0d10;
+      --card-hi: #15151a;
+      --line: #22222a;
+      --text: #f2f2f5;
+      --muted: #8b8b98;
+      --accent: #ff3b30;
+      --good: #30d158;
+      --warn: #ffd60a;
+      --bad: #ff453a;
+      --rgb: #ff0000;
+      /* updated from JS with the selected RGB color */
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.45;
+      min-height: 100vh;
+      padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    }
+
+    .shell {
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    /* ===== Header ===== */
+
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .subtitle {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    /* ===== Battery indicator ===== */
+
+    .battery-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+
+    .battery {
+      position: relative;
+      width: 34px;
+      height: 17px;
+      border: 2px solid var(--muted);
+      border-radius: 5px;
+      padding: 2px;
+    }
+
+    .battery::after {
+      /* battery cap */
+      content: "";
+      position: absolute;
+      right: -5px;
+      top: 50%;
+      width: 3px;
+      height: 7px;
+      transform: translateY(-50%);
+      background: var(--muted);
+      border-radius: 0 2px 2px 0;
+    }
+
+    .battery-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 2px;
+      background: var(--good);
+      transition: width 0.4s ease, background 0.4s ease;
+    }
+
+    .battery-fill.mid {
+      background: var(--warn);
+    }
+
+    .battery-fill.low {
+      background: var(--bad);
+    }
+
+    .bolt {
+      width: 14px;
+      height: 14px;
+      fill: var(--warn);
+    }
+
+    /* ===== Cards ===== */
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .card-head h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex: none;
+    }
+
+    .dot.rgb {
+      background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+    }
+
+    .dot.red {
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+    }
+
+    .field {
+      margin-bottom: 18px;
+    }
+
+    .field-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .field-label output {
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ===== Segmented effect selector ===== */
+
+    .seg {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      padding: 4px;
+      background: var(--card-hi);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    .seg button {
+      appearance: none;
+      border: 0;
+      border-radius: 9px;
+      padding: 9px 4px;
+      font: inherit;
+      font-size: 0.88rem;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .seg button[aria-checked="true"] {
+      background: #2a2a33;
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* ===== Range sliders ===== */
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 28px;
+      background: transparent;
+      margin: 0;
+      cursor: pointer;
+      --track: #2a2a33;
+    }
+
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 12px;
+      border-radius: 999px;
+      background: var(--track);
+    }
+
+    input[type="range"]::-moz-range-track {
+      height: 12px;
+      border-radius: 999px;
+      background: var(--track);
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 26px;
+      height: 26px;
+      margin-top: -7px;
+      border-radius: 50%;
+      background: #fff;
+      border: 3px solid #000;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4), 0 2px 6px rgba(0, 0, 0, 0.6);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      border: 3px solid #000;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4), 0 2px 6px rgba(0, 0, 0, 0.6);
+    }
+
+    #rgbHue {
+      --track: linear-gradient(90deg, #f00 0%, #ff0 16.66%, #0f0 33.33%, #0ff 50%, #00f 66.66%, #f0f 83.33%, #f00 100%);
+    }
+
+    #rgbBri {
+      --track: linear-gradient(90deg, #000, var(--hue-full, #f00));
+    }
+
+    #redBri {
+      --track: linear-gradient(90deg, #1a0000, var(--accent));
+    }
+
+    /* ===== RGB preview + presets ===== */
+
+    .preview-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .swatch {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: var(--rgb);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 0 22px var(--rgb);
+      flex: none;
+      transition: background 0.1s, box-shadow 0.1s;
+    }
+
+    .hex {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 1.1rem;
+      letter-spacing: 1px;
+    }
+
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .preset {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      outline: 1px solid rgba(255, 255, 255, 0.15);
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .preset:active {
+      transform: scale(0.92);
+    }
+
+    /* ===== Apply button ===== */
+
+    .apply-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 6px;
+    }
+
+    .btn {
+      appearance: none;
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 22px;
+      font: inherit;
+      font-weight: 600;
+      color: #000;
+      background: var(--text);
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.05s;
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .btn.rgb {
+      background: var(--rgb);
+      color: var(--btn-text, #000);
+    }
+
+    .btn.red {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .msg {
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .msg.dirty {
+      color: var(--warn);
+    }
+
+    .msg.ok {
+      color: var(--good);
+    }
+
+    .msg.err {
+      color: var(--bad);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="shell">
+
+    <!-- ===== Header with battery ===== -->
+    <header class="top">
+      <div>
+        <h1 class="title">LED Control</h1>
+        <p class="subtitle">LED chain controller</p>
+      </div>
+      <div class="battery-wrap" id="battery" title="Battery">
+        <svg class="bolt" id="batBolt" viewBox="0 0 24 24" hidden aria-label="Charging">
+          <path d="M13 2 4 14h6l-1 8 9-12h-6z" />
+        </svg>
+        <span id="batPct">--%</span>
+        <div class="battery"><div class="battery-fill" id="batFill"></div></div>
+      </div>
+    </header>
+
+    <!-- ===== RGB LEDs ===== -->
+    <section class="card" id="rgbCard">
+      <div class="card-head">
+        <span class="dot rgb"></span>
+        <h2>RGB LEDs</h2>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Effect</div>
+        <div class="seg" role="radiogroup" data-chain="rgb">
+          <button type="button" role="radio" data-value="off">Off</button>
+          <button type="button" role="radio" data-value="constant">Constant</button>
+          <button type="button" role="radio" data-value="blink">Blink</button>
+          <button type="button" role="radio" data-value="fade">Fade</button>
+        </div>
+      </div>
+
+      <div class="preview-row">
+        <div class="swatch" id="rgbSwatch"></div>
+        <div>
+          <div class="hex" id="rgbHex">#FF0000</div>
+          <div class="msg">Selected color</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span>Color</span><output id="rgbHueOut">0°</output></div>
+        <input type="range" id="rgbHue" min="0" max="359" value="0" aria-label="RGB hue">
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span>Brightness</span><output id="rgbBriOut">100%</output></div>
+        <input type="range" id="rgbBri" min="5" max="100" value="100" aria-label="RGB brightness">
+      </div>
+
+      <div class="field">
+        <div class="field-label">Presets</div>
+        <div class="presets" id="rgbPresets"></div>
+      </div>
+
+      <div class="field" id="rgbSpeedField">
+        <div class="field-label"><span>Speed</span><output id="rgbSpeedOut">50</output></div>
+        <input type="range" id="rgbSpeed" min="1" max="100" value="50" aria-label="RGB effect speed">
+      </div>
+
+      <div class="apply-row">
+        <button type="button" class="btn rgb" id="rgbApply">Apply</button>
+        <span class="msg" id="rgbMsg"></span>
+      </div>
+    </section>
+
+    <!-- ===== Low power red LEDs ===== -->
+    <section class="card" id="redCard">
+      <div class="card-head">
+        <span class="dot red"></span>
+        <h2>Red LEDs</h2>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Effect</div>
+        <div class="seg" role="radiogroup" data-chain="red">
+          <button type="button" role="radio" data-value="off">Off</button>
+          <button type="button" role="radio" data-value="constant">Constant</button>
+          <button type="button" role="radio" data-value="blink">Blink</button>
+          <button type="button" role="radio" data-value="fade">Fade</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span>Brightness</span><output id="redBriOut">100%</output></div>
+        <input type="range" id="redBri" min="5" max="100" value="100" aria-label="Red LED brightness">
+      </div>
+
+      <div class="field" id="redSpeedField">
+        <div class="field-label"><span>Speed</span><output id="redSpeedOut">50</output></div>
+        <input type="range" id="redSpeed" min="1" max="100" value="50" aria-label="Red LED effect speed">
+      </div>
+
+      <div class="apply-row">
+        <button type="button" class="btn red" id="redApply">Apply</button>
+        <span class="msg" id="redMsg"></span>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    // Current UI selections. Nothing is sent to the ESP32 until "Apply" is pressed.
+    const state = {
+      rgb: { effect: 'constant', hue: 0, bri: 100, speed: 50 },
+      red: { effect: 'constant', bri: 100, speed: 50 }
+    };
+
+    const PRESETS = [
+      { name: 'Red', hue: 0 },
+      { name: 'Orange', hue: 25 },
+      { name: 'Yellow', hue: 55 },
+      { name: 'Green', hue: 120 },
+      { name: 'Cyan', hue: 180 },
+      { name: 'Blue', hue: 230 },
+      { name: 'Purple', hue: 275 },
+      { name: 'Pink', hue: 320 }
+    ];
+
+    /* ========== Helpers ========== */
+
+    // HSV (h: 0-359, s/v: 0-1) to "#RRGGBB" - Color & Brightness coexist in this code
+    function hsvToHex(h, s, v) {
+      const f = (n) => {
+        const k = (n + h / 60) % 6;
+        const c = v - v * s * Math.max(0, Math.min(k, 4 - k, 1));
+        return Math.round(c * 255).toString(16).padStart(2, '0');
+      };
+      return ('#' + f(5) + f(3) + f(1)).toUpperCase();
+    }
+
+    function rgbHex() {
+      return hsvToHex(state.rgb.hue, 1, state.rgb.bri / 100);
+    }
+
+    function setMessage(el, text, cls) {
+      el.textContent = text;
+      el.className = 'msg' + (cls ? ' ' + cls : '');
+    }
+
+    function markDirty(chain) {
+      setMessage($(chain + 'Msg'), 'Not applied yet', 'dirty');
+    }
+
+    /* ========== Rendering ========== */
+
+    function renderEffect(chain) {
+      const seg = document.querySelector('.seg[data-chain="' + chain + '"]');
+      seg.querySelectorAll('button').forEach((b) => {
+        b.setAttribute('aria-checked', b.dataset.value === state[chain].effect ? 'true' : 'false');
+      });
+      // Speed only makes sense for animated effects
+      const animated = state[chain].effect === 'blink' || state[chain].effect === 'fade';
+      $(chain + 'SpeedField').hidden = !animated;
+    }
+
+    function renderRgb() {
+      const hex = rgbHex();
+      const root = document.documentElement.style;
+      root.setProperty('--rgb', hex);
+      root.setProperty('--hue-full', hsvToHex(state.rgb.hue, 1, 1));
+      // Dark text on bright colors, light text on dark ones
+      const r = parseInt(hex.substr(1, 2), 16), g = parseInt(hex.substr(3, 2), 16), b = parseInt(hex.substr(5, 2), 16);
+      root.setProperty('--btn-text', (0.299 * r + 0.587 * g + 0.114 * b) > 140 ? '#000' : '#fff');
+
+      $('rgbHex').textContent = hex;
+      $('rgbHueOut').textContent = state.rgb.hue + '°';
+      $('rgbBriOut').textContent = state.rgb.bri + '%';
+      $('rgbSpeedOut').textContent = state.rgb.speed;
+    }
+
+    function renderRed() {
+      $('redBriOut').textContent = state.red.bri + '%';
+      $('redSpeedOut').textContent = state.red.speed;
+    }
+
+    function updateBattery(percent, charging) {
+      const p = Math.max(0, Math.min(100, Math.round(percent)));
+      const fill = $('batFill');
+      fill.style.width = p + '%';
+      fill.className = 'battery-fill' + (p <= 20 ? ' low' : p <= 50 ? ' mid' : '');
+      $('batPct').textContent = p + '%';
+      $('batBolt').toggleAttribute('hidden', !charging);   // SVG elements have no .hidden property
+    }
+
+    /* ========== Input wiring ========== */
+
+    document.querySelectorAll('.seg').forEach((seg) => {
+      seg.addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        const chain = seg.dataset.chain;
+        state[chain].effect = btn.dataset.value;
+        renderEffect(chain);
+        markDirty(chain);
+      });
+    });
+
+    function bindRange(id, chain, key, render) {
+      $(id).addEventListener('input', (e) => {
+        state[chain][key] = Number(e.target.value);
+        render();
+        markDirty(chain);
+      });
+    }
+
+    bindRange('rgbHue', 'rgb', 'hue', renderRgb);
+    bindRange('rgbBri', 'rgb', 'bri', renderRgb);
+    bindRange('rgbSpeed', 'rgb', 'speed', renderRgb);
+    bindRange('redBri', 'red', 'bri', renderRed);
+    bindRange('redSpeed', 'red', 'speed', renderRed);
+
+    PRESETS.forEach((p) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'preset';
+      b.title = p.name;
+      b.setAttribute('aria-label', p.name);
+      b.style.background = hsvToHex(p.hue, 1, 1);
+      b.addEventListener('click', () => {
+        state.rgb.hue = p.hue;
+        $('rgbHue').value = p.hue;
+        renderRgb();
+        markDirty('rgb');
+      });
+      $('rgbPresets').appendChild(b);
+    });
+
+    /* ========== Backend calls ========== */
+
+    async function postJson(url, payload) {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!r.ok) throw new Error((await r.text()) || 'HTTP ' + r.status);
+    }
+
+    function applyRgb() {
+      return postJson('/api/rgb', {
+        effect: state.rgb.effect,   // "off" | "constant" | "blink" | "fade"
+        color: rgbHex(),            // "#RRGGBB", brightness already applied
+        speed: state.rgb.speed      // 1-100, mapped to a period on the ESP32
+      });
+    }
+
+    function applyRed() {
+      return postJson('/api/red', {
+        effect: state.red.effect,   // "off" | "constant" | "blink" | "fade"
+        brightness: state.red.bri,  // 5-100 %
+        speed: state.red.speed      // 1-100, mapped to a period on the ESP32
+      });
+    }
+
+    async function loadBattery() {
+      try {
+        const r = await fetch('/api/battery', { cache: 'no-store' });
+        const d = await r.json();   // { voltage: 3.92, percent: 69, charging: false }
+        updateBattery(d.percent, d.charging);
+        $('battery').title = 'Battery ' + d.voltage + ' V';
+      } catch (err) {
+        $('batPct').textContent = '--%';
+      }
+    }
+
+    function bindApply(chain, fn) {
+      const btn = $(chain + 'Apply');
+      const msg = $(chain + 'Msg');
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        setMessage(msg, 'Sending...');
+        try {
+          await fn();
+          setMessage(msg, 'Applied', 'ok');
+        } catch (err) {
+          setMessage(msg, 'Failed: ' + err.message, 'err');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    }
+
+    bindApply('rgb', applyRgb);
+    bindApply('red', applyRed);
+
+    /* ========== Init ========== */
+
+    renderEffect('rgb');
+    renderEffect('red');
+    renderRgb();
+    renderRed();
+    loadBattery();
+    setInterval(loadBattery, 10000);
+  </script>
+</body>
+
+</html>
